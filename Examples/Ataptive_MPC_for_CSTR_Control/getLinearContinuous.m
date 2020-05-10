@@ -1,6 +1,5 @@
 function [a, b, bd] = getLinearContinuous(T,CA)
-% Define linear continuous-time matrices A and B for CSTR.  Last input is
-% offset.
+% Define linear continuous-time matrices A and B for CSTR.
 % Parameters
 EaOverR = 5963.6;
 lnA0 = 17.3689;
