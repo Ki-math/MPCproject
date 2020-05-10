@@ -1,4 +1,4 @@
-プロジェクト: MPCproject
+MPCproject
 
 This is the ordermade Model Predictive Control library.
 All files are packed as the Simulink project.
