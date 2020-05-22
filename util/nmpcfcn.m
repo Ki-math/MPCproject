@@ -20,94 +20,55 @@ function [designValue,mv,slack,status] = nmpcfcn(d0,x0,mv0,md,ref,params,ny,nu,n
 % slack:Slack variable for the soft constrainsts
 % status:Optimization flag (1:feasible 0:infeasible)
 
-% Permanent variables
-% persistent iA;
-% persistent flag;
-% if isempty(flag)
-%     flag = true;
-% end
-
 % Initialization for each variable
-Hp = params.PredictiveHorizon;
-Hc = params.ControlHorizon;
-idx_x = Hp*nx;
-idx_u = Hc*nu;
-idx_du = (Hc-1)*nu;
-idx_y = Hp*ny;
-idx_g = 2*idx_u + 2*idx_du + 2*idx_y + 1; % Last one is for the slack
-idx_h = 2*idx_x;
 designValue = zeros(length(d0),1,'like',d0);
 mv = zeros(nu,1);
 status = false;
 slack = 0;
-tol = 1e-6;     % Tollerance value
 itermax = params.IterationMax;
-mf = str2func(params.measurementFunction);  % Function handle for the state function
-sf = str2func(params.stateFunction);        % Function handle for the measurement function
+mf = str2func(params.measurementFunction);  % Function handle for the measurement function
+sf = str2func(params.stateFunction);        % Function handle for the state function
 
 % Cost function
-J = @(d) costFcn(d,ref,params,ny,nu,nx,mf);
+J = @(d) costFcn(d,x0,ref,md,params,ny,nu,nx,sf,mf);
+% cost = @(d) calcCostFcn(d,x0,ref,md,params,ny,nu,nx,sf,mfJ);
+% function [Jc,dJc] = calcCostFcn(d,x0,ref,md,params,ny,nu,nx,sf,mf,J)
+%    Jc = J(d);
+%    dJc = calcJacobian(d,J);
+% end
 
-% Inequality constraint
-g = @(d) inqConstFcn(d,mv0,params,ny,nu,nx,mf);
+% Linear Inequality constraint
+[A,b] = linInqConstFcn(d0,mv0,params,nx,nu);
 
-% Equality constraint
-h = @(d) enqConstFcn(d,x0,md,params,nu,nx,sf);
+% Nonlinear Inequality constraint
+g = @(d) nonlinInqConstFcn(d,x0,md,params,ny,nu,nx,sf,mf);
+
+% Nonlinear Equality constraint
+% h = @(d) nonlinEnqConstFcn(d,x0,md,params,nu,nx,sf);
 
 % Nonlinear constraints
 nonlcon = @(d) nonlinFcn(d);
 function [c,ceq] = nonlinFcn(d)
     c = g(d);
-    ceq = h(d);
+    ceq = [];
 end
 
-% Active set for initialization
-% if isempty(iA)
-%     iA = zeros((idx_g+idx_h),2);
-%     inq = zeros(idx_g,1);
-%     inq = g(d0);
-%     for i = 1:length(iA)
-%        if i <= idx_g
-%            % Inequality constraints
-%            if abs(inq(i)) < tol
-%               iA(i,1) = 1;  % ActiveSet
-%            end
-%            iA(i,2) = 1; % Constraint ID for Inequality constraints
-%        else
-%            % Equality constraints
-%            iA(i,1) = 1; % ActiveSet
-%            iA(i,2) = 2; % Constraint ID for Equality constraints
-%        end
-%     end
-% end
+% Bound constraint
+lb = -inf(length(d0),1); lb(length(lb),1) = 0;
+ub = inf(length(d0),1);
 
-% Solve the SQP
-if ~params.usefmincon
-    % Custom sqp solver
-%     if flag
-%         opts = optimoptions('fmincon','Algorithm','sqp','Display','off','MaxIterations',itermax);
-%         [dopt,~,exitflag] = fmincon(J,d0,[],[],[],[],[],[],nonlcon,opts);
-%         if exitflag == 1
-%             status = true;
-%         end
-%         flag = false;
-%     else
-%         [dopt,iA,status] = sqp(d0,J,g,h,iA,itermax);
-%     end
-else
-    % Using fmincon with sqp
-    opts = optimoptions('fmincon','Algorithm','sqp','Display','off','MaxIterations',itermax);
-    [dopt,~,exitflag] = fmincon(J,d0,[],[],[],[],[],[],nonlcon,opts);
-    if exitflag == 1
-        status = true;
-    end
+% Solve NP by using the fmincon with sqp
+% opts = optimoptions('fmincon','Algorithm','sqp','Display','off','SpecifyObjectiveGradient',true,'MaxIterations',itermax);
+opts = optimoptions('fmincon','Algorithm','sqp','Display','off','MaxIterations',itermax);
+[dopt,~,exitflag] = fmincon(J,d0,A,b,[],[],lb,ub,nonlcon,opts);
+if exitflag > 0
+    status = true;
 end
 
 if status
     % Feasible
-    mv = dopt((idx_x+1):(idx_x+nu))./params.MV_scalefactor;
+    mv = dopt(1:nu).*params.MV_scalefactor;
     designValue = dopt;
-%     iA(1:idx_g,1) = 0;
     slack = dopt(length(dopt));
 else
     % Infeasible

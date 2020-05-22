@@ -32,6 +32,11 @@ function [xopt,iAopt,flagOpt] = sqp(x,J,g,h,iA0,itermax)
 %           :       :           :  ;
 %          d1ndxn df2dxn ... dfndxn].
 
+persistent H;
+if isempty(H)
+    H = eye(length(x));
+end
+
 % Optimization parameters
 tollerance = 1e-6;
 
@@ -56,12 +61,14 @@ else
 end
 
 ntotal = nineq + neq;   % Total number of constraints
-iA = iA0;               % Active set during optimization
+iA = iA0;               % Active set for during iteration loop
+iA(1:nineq,1) = 0;      % Initialize the Active set 
 
 dx = zeros(n,1);        % Pertubation of design variable
-H = eye(n);             % Initial estimate of Hessian
+% H = eye(n);             % Initial estimate of Hessian
 xopt = zeros(n,1);      % Optimized variable
-iAopt = zeros(ntotal,2);% Active set after optimization
+iAopt = iA0;            % Active set after optimization
+iAopt(1:nineq,1) = 0;   % Initialize the Active set 
 flagOpt = false;        % Optimize flag
 
 for i = 1:itermax
@@ -92,37 +99,42 @@ for i = 1:itermax
     % Initialization
     lamda = zeros(size(A,1),1);
     mu = zeros(size(Aeq,1),1);
-    iA1 = zeros(ntotal,2);
     flagAC = false;
-%     [dx,lamda,mu,iA1,flagAC] = activeSet(dx,H,c,A,b,Aeq,beq,iA0,itermax);
-    opts = optimoptions('quadprog','Display','off');
-    [dx,~,flagQC] = quadprog(H,c,A,b,Aeq,beq,[],[],[],opts);
-    if flagQC == 1
-        flagAC = true;
-    end
+    [dx,lamda,mu,iA,flagAC] = activeSet(dx,H,c,A,b,Aeq,beq,iA0,itermax);
+%     opts = optimoptions('quadprog','Algorithm','active-set','Display','off');
+%     [dx,~,flagQC] = quadprog(H,c,A,b,Aeq,beq,[],[],dx,opts);
+%     opt = mpcActiveSetOptions;
+%     iA0 = false(size(A(:,1)));
+%     [dx,exitflag,iA,~] = mpcActiveSetSolver(H,c,A,b,Aeq,beq,iA0,opt);
+% 
+%     if exitflag > 1
+%         flagAC = true;
+%     end
 
     if flagAC
         % Convergence judgement
         if norm(dx) <= tollerance
             xopt = x;
-            iAopt = iA1;
+            iAopt = iA;
             flagOpt = true;
             break;
         end
 
         % Line search by Armijo condition 
-        flag2 = false;      %Convergence flag for line search
-
+%         flag2 = false;      %Convergence flag for line search
+% 
 %         beta = 1;
 %         alpha = 0;
 %         Pleft = calcP(x+beta*dx,J,g,h,rho);
-%         for ii = 1:1000
+%         for ii = 1:100
+% %             fprintf('No.%d Line search\n',ii)
 %             P = calcP(x,J,g,h,rho);
 %             Pl = calcPl(x,dx,J,g,h,rho);
 %             deltaP = Pl - P;
 %             Pright = P + guzai * beta * deltaP;
 % 
 %             if Pleft <= Pright
+% %                 fprintf('Converge\n')
 %                 alpha = beta;
 %                 flag2 = true;
 %                 break;
@@ -131,14 +143,17 @@ for i = 1:itermax
 %             end
 %         end
 % 
-%         [alpha,flag2] = lineSearch(x,dx,@calcP,J,g,h,rho);
-        
+% %         [alpha,flag2] = lineSearch(x,dx,@calcP,J,g,h,rho);
+        Jfun = @(a) calcP(x+a*dx,J,g,h,rho);
+        alpha = fminbnd(Jfun,0,10);
         xpre = x;
-        if flag2
-            x = x + alpha * dx;
-        else
-            x = x + dx;
-        end
+        x = x + alpha * dx;
+        
+%         if flag2
+%             x = x + alpha * dx;
+%         else
+%             x = x + dx;
+%         end
 
         %Estimate hessian by calculating modified BFGS method
         s = x - xpre;
@@ -173,11 +188,15 @@ for i = 1:itermax
         H = H - H*s*(H*s)'/sHs + qhat*qhat'/(s'*qhat);
 
         %Update active set
-        iA = iA1;
+        iA0 = iA;
     else
         % Not find feasible solution by Active Set
         break;
     end
+end
+
+if ~flagOpt
+    H = eye(n);
 end
 
 end

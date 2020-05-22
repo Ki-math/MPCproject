@@ -43,12 +43,6 @@ end
 if ~isfield(params, 'OV_scalefactor')
     params.OV_scalefactor = ones(ny,1);
 end
-if ~isfield(params, 'MD_scalefactor')
-    params.MD_scalefactor = ones(nd,1);
-end
-if ~isfield(params, 'State_scalefactor')
-    params.State_scalefactor = ones(nx,1);
-end
 if ~isfield(params, 'usefmincon')
     params.usefmincon = true;
 end

@@ -1,16 +1,20 @@
-function J = costFcn(d,ref,params,ny,nu,nx,h)
+function J = costFcn(d,x0,ref,md,params,ny,nu,nx,f,h)
 % #codegen
 % Calculating the cost function
 % Arguments : 
-%   d:Design variable output & input
+%   d:Design variable (input)
+%   x0:Initial state
 %   ref:Reference vector
+%   md:Measurement Disturbance
 %   params:Parameter structuer
 %   ny:Order of output
 %   nu:Order of input
 %   nx:Order of state
-%   h:Function handle
+%   f:Function handle of state transition
+%   h:Function handle of measurement function
 % Output :
 %   J:Cost function(Scalar value)
+%   dJ:Gradient of cost fiunction
 
 Hp = params.PredictiveHorizon;
 Hc = params.ControlHorizon;
@@ -24,18 +28,16 @@ x = zeros(Hp*nx,1);
 u = zeros(Hc*nu,1);
 ys = zeros(Hp*ny,1);
 us = zeros(length(u),1,'like',u);
-us = d((Hp*nx)+1:(Hp*nx)+(Hc*nu));  % Input (Dimensionless)
+us = d(1:Hc*nu,1);                  % Input (Dimensionless)
 REFs = zeros(Hp*ny,1);
 Qaug = zeros(Hp*ny);
 Raug = zeros(Hc*nu);
 slack = 0;
 scale_mv = params.MV_scalefactor;
 scale_ov = params.OV_scalefactor;
-scale_state = params.State_scalefactor;
 
 % Extract the design variables and convert to the engineering units
-x = d(1:(Hp*nx)).*kron(ones(Hp,1),scale_state);                  % State
-u = d((Hp*nx)+1:(Hp*nx)+(Hc*nu)).*kron(ones(Hc,1),scale_mv);     % Input
+u = us.*kron(ones(Hc,1),scale_mv);
 slack = d(length(d));
 
 % Output calculation
@@ -43,7 +45,9 @@ tempy = 1:ny;
 tempx = 1:nx;
 tempu = 1:nu;
 for i = 1:Hp
-    ys(tempy) = h(x(tempx),u(tempu))./scale_ov; % Measurment function, convert to the dimensionless
+    x(tempx,1) = f(x0,u(tempu,1),md);                 % State transition
+    ys(tempy,1) = h(x(tempx,1),u(tempu,1))./scale_ov; % Measurment function, convert to the dimensionless
+    x0 = x(tempx,1);                                  % Update initial state
     tempy = tempy + ny;
     tempx = tempx + nx;
     if i < Hc
