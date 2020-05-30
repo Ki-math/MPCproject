@@ -38,7 +38,7 @@ J = @(d) costFcn(d,x0,ref,md,params,ny,nu,nx,sf,mf);
 % end
 
 % Linear Inequality constraint
-[A,b] = linInqConstFcn(d0,mv0,params,nx,nu);
+[A,b] = linInqConstFcn(d0,mv0,params,nu);
 
 % Nonlinear Inequality constraint
 g = @(d) nonlinInqConstFcn(d,x0,md,params,ny,nu,nx,sf,mf);

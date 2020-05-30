@@ -1,4 +1,4 @@
-function [sys,x0,str,ts,simStateCompliance] = mypendcartAnimation(t,x,u,flag,RefBlock)
+function [sys,x0,str,ts,simStateCompliance] = pendcartAnimation(t,x,u,flag,RefBlock)
 %pendcartAnimation S-function for making pendulum animation.
 %
 %   See also: PENDDEMO.
